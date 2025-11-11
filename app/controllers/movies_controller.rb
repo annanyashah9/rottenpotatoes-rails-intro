@@ -1,14 +1,20 @@
 class MoviesController < ApplicationController
   before_action :set_movie, only: %i[ show edit update destroy ]
 
-  # GET /movies or /movies.json
+  # GET /movies
   def index
-    @movies = Movie.all
+    # all possible ratings (from the model)
+    @all_ratings = Movie.all_ratings
+
+    # which ratings should be shown (default: all checked / first visit or none selected)
+    @ratings_to_show = params[:ratings]&.keys || @all_ratings
+
+    # fetch movies filtered by selected ratings
+    @movies = Movie.with_ratings(@ratings_to_show)
   end
 
-  # GET /movies/1 or /movies/1.json
-  def show
-  end
+  # GET /movies/1
+  def show; end
 
   # GET /movies/new
   def new
@@ -16,10 +22,9 @@ class MoviesController < ApplicationController
   end
 
   # GET /movies/1/edit
-  def edit
-  end
+  def edit; end
 
-  # POST /movies or /movies.json
+  # POST /movies
   def create
     @movie = Movie.new(movie_params)
 
@@ -34,7 +39,7 @@ class MoviesController < ApplicationController
     end
   end
 
-  # PATCH/PUT /movies/1 or /movies/1.json
+  # PATCH/PUT /movies/1
   def update
     respond_to do |format|
       if @movie.update(movie_params)
@@ -47,10 +52,9 @@ class MoviesController < ApplicationController
     end
   end
 
-  # DELETE /movies/1 or /movies/1.json
+  # DELETE /movies/1
   def destroy
     @movie.destroy!
-
     respond_to do |format|
       format.html { redirect_to movies_path, status: :see_other, notice: "Movie was successfully destroyed." }
       format.json { head :no_content }
@@ -58,12 +62,11 @@ class MoviesController < ApplicationController
   end
 
   private
-    # Use callbacks to share common setup or constraints between actions.
+
     def set_movie
       @movie = Movie.find(params[:id])
     end
 
-    # Only allow a list of trusted parameters through.
     def movie_params
       params.require(:movie).permit(:title, :rating, :description, :release_date)
     end
