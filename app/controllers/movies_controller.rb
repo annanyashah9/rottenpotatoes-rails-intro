@@ -3,27 +3,58 @@ class MoviesController < ApplicationController
 
   # GET /movies
   def index
-    # all possible ratings for the checkboxes
     @all_ratings = Movie.all_ratings
 
-    # which ratings should be shown (default = all)
-    @ratings_to_show =
+    # Was the Refresh button used (explicit submit)?
+    submitted = params[:commit].present?
+
+    # Decide ratings to show:
+    # - If ratings were sent, use them.
+    # - If user clicked Refresh with none checked, treat as "show all".
+    # - Else fall back to session or default.
+    ratings =
       if params[:ratings].present?
-        params[:ratings].keys
-      else
+        params[:ratings].is_a?(Hash) ? params[:ratings].keys : Array(params[:ratings])
+      elsif submitted
         @all_ratings
+      else
+        session[:ratings] || @all_ratings
       end
 
-    # which column to sort by (optional)
-    @sort_by = params[:sort_by].presence
+    # Decide sorting:
+    sort_by =
+      if params[:sort_by].present?
+        params[:sort_by]
+      else
+        session[:sort_by]
+      end
 
-    # base scope filtered by ratings
-    @movies = Movie.with_ratings(@ratings_to_show)
+    # If user just landed here without params but we have session state,
+    # redirect to the canonical RESTful URL that includes the params.
+    redirect_needed =
+      !submitted && (
+        (params[:ratings].blank? && session[:ratings].present?) ||
+        (params[:sort_by].blank?  && session[:sort_by].present?)
+      )
 
-    # apply sort if valid
-    if %w[title release_date].include?(@sort_by)
-      @movies = @movies.order(@sort_by => :asc)
+    if redirect_needed
+      redirect_to movies_path(
+        ratings: ratings.to_h { |r| [r, '1'] },
+        sort_by: sort_by
+      ) and return
     end
+
+    # Persist current choices into session
+    session[:ratings] = ratings
+    session[:sort_by] = sort_by
+
+    # Expose to view
+    @ratings_to_show = ratings
+    @sort_by = %w[title release_date].include?(sort_by) ? sort_by : nil
+
+    # Query
+    @movies = Movie.with_ratings(@ratings_to_show)
+    @movies = @movies.order(@sort_by => :asc) if @sort_by.present?
   end
 
   def show; end
