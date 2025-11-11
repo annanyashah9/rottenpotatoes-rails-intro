@@ -5,64 +5,57 @@ class MoviesController < ApplicationController
   def index
     @all_ratings = Movie.all_ratings
 
-    # Was the Refresh button used (explicit submit)?
-    submitted = params[:commit].present?
-
-    # Decide ratings to show:
-    # - If ratings were sent, use them.
-    # - If user clicked Refresh with none checked, treat as "show all".
-    # - Else fall back to session or default.
-    ratings =
-      if params[:ratings].present?
-        params[:ratings].is_a?(Hash) ? params[:ratings].keys : Array(params[:ratings])
-      elsif submitted
-        @all_ratings
-      else
-        session[:ratings] || @all_ratings
-      end
-
-    # Decide sorting:
-    sort_by =
-      if params[:sort_by].present?
-        params[:sort_by]
-      else
-        session[:sort_by]
-      end
-
-    # If user just landed here without params but we have session state,
-    # redirect to the canonical RESTful URL that includes the params.
-    redirect_needed =
-      !submitted && (
-        (params[:ratings].blank? && session[:ratings].present?) ||
-        (params[:sort_by].blank?  && session[:sort_by].present?)
-      )
-
-    if redirect_needed
-      redirect_to movies_path(
-        ratings: ratings.to_h { |r| [r, '1'] },
-        sort_by: sort_by
-      ) and return
+    # ---- ratings_to_show (array of strings) ----
+    if params[:ratings].present?
+      @ratings_to_show =
+        if params[:ratings].respond_to?(:keys)
+          params[:ratings].keys
+        else
+          Array(params[:ratings]).map(&:to_s)
+        end
+      session[:ratings] = @ratings_to_show
+    elsif session[:ratings].present?
+      @ratings_to_show = Array(session[:ratings]).map(&:to_s)
+    else
+      @ratings_to_show = @all_ratings
     end
 
-    # Persist current choices into session
-    session[:ratings] = ratings
-    session[:sort_by] = sort_by
+    # ---- sort_by (string) ----
+    if params[:sort_by].present?
+      @sort_by = params[:sort_by]
+      session[:sort_by] = @sort_by
+    elsif session[:sort_by].present?
+      @sort_by = session[:sort_by]
+    else
+      @sort_by = nil
+    end
 
-    # Expose to view
-    @ratings_to_show = ratings
-    @sort_by = %w[title release_date].include?(sort_by) ? sort_by : nil
+    # ---- canonical redirect: if params missing but we have session, redirect to RESTful URL ----
+    must_redirect = false
+    redirect_params = {}
 
-    # Query
+    if params[:ratings].blank? && session[:ratings].present?
+      redirect_params[:ratings] = session[:ratings].index_with { '1' } # {"G"=>"1", ...}
+      must_redirect = true
+    end
+    if params[:sort_by].blank? && session[:sort_by].present?
+      redirect_params[:sort_by] = session[:sort_by]
+      must_redirect = true
+    end
+
+    if must_redirect
+      return redirect_to movies_path(redirect_params)
+    end
+
+    # ---- fetch records ----
     @movies = Movie.with_ratings(@ratings_to_show)
-    @movies = @movies.order(@sort_by => :asc) if @sort_by.present?
+    if %w[title release_date].include?(@sort_by)
+      @movies = @movies.order(@sort_by => :asc)
+    end
   end
 
   def show; end
-
-  def new
-    @movie = Movie.new
-  end
-
+  def new;  @movie = Movie.new; end
   def edit; end
 
   def create

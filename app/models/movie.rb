@@ -1,17 +1,22 @@
 class Movie < ApplicationRecord
-  # All allowed ratings to show as checkboxes
   def self.all_ratings
-    # Keep this in sync with your seeds/schema if needed
     %w[G PG PG-13 R NC-17]
   end
 
-  # Return movies filtered by ratings_list (case-insensitive).
-  # If ratings_list is nil/empty, return all movies.
+  # Accepts an Array like ['G','PG'] OR a Hash/Parameters like {"G"=>"1","PG"=>"1"}.
+  # Returns all movies if the input is blank.
   def self.with_ratings(ratings_list)
     return all if ratings_list.blank?
 
-    # Case-insensitive match; ratings are short, this is fine.
-    up = ratings_list.map(&:upcase)
-    where('UPPER(rating) IN (?)', up)
+    list =
+      if defined?(ActionController::Parameters) && ratings_list.is_a?(ActionController::Parameters)
+        ratings_list.keys
+      elsif ratings_list.respond_to?(:keys) && !ratings_list.is_a?(Array)
+        ratings_list.keys
+      else
+        Array(ratings_list)
+      end
+
+    where(rating: list.map(&:to_s))
   end
 end
